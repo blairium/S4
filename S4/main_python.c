@@ -59,14 +59,14 @@ void fft_destroy(void);
 extern "C" {
 #endif
 
-static int CheckPyNumber(PyArrayObject *obj){
+static int CheckPyNumber(PyObject *obj){
 	return PyFloat_Check(obj) || PyLong_Check(obj)
 #if PY_MAJOR_VERSION < 3
 		|| PyLong_Check(obj)
 #endif
 	;
 }
-static double AsNumberPyNumber(PyArrayObject *obj){
+static double AsNumberPyNumber(PyObject *obj){
 	if(PyFloat_Check(obj)){
 		return PyFloat_AsDouble(obj);
 	}else if(PyLong_Check(obj)){
@@ -79,10 +79,10 @@ static double AsNumberPyNumber(PyArrayObject *obj){
 #endif
 	return -1.0;
 }
-static int CheckPyComplex(PyArrayObject *obj){
+static int CheckPyComplex(PyObject *obj){
 	return CheckPyNumber(obj) || PyComplex_Check(obj);
 }
-static void AsComplexPyComplex(PyArrayObject *obj, double *re, double *im){
+static void AsComplexPyComplex(PyObject *obj, double *re, double *im){
 	if(CheckPyNumber(obj)){
 		*re = AsNumberPyNumber(obj);
 		*im = 0;
@@ -94,21 +94,21 @@ static void AsComplexPyComplex(PyArrayObject *obj, double *re, double *im){
 		*im = 0.;
 	}
 }
-static PyArrayObject *FromIntPyDefInt(int i){
+static PyObject *FromIntPyDefInt(int i){
 #if PY_MAJOR_VERSION < 3
 	return PyLong_FromLong(i);
 #else
 	return PyLong_FromLong(i);
 #endif
 }
-static int CheckPyLong(PyArrayObject *obj){
+static int CheckPyLong(PyObject *obj){
 #if PY_MAJOR_VERSION < 3
 	return PyLong_Check(obj);
 #else
 	return PyLong_Check(obj);
 #endif
 }
-static long GetPyLong(PyArrayObject *obj){
+static long GetPyLong(PyObject *obj){
 #if PY_MAJOR_VERSION < 3
 	return PyLong_AsLong(obj);
 #else
@@ -169,7 +169,7 @@ void threadsafe_destroy(void){
 }
 
 struct module_state {
-    PyArrayObject *error;
+    PyObject *error;
 };
 
 #if PY_MAJOR_VERSION >= 3
@@ -180,19 +180,19 @@ static struct module_state _state;
 #endif
 
 typedef struct{
-	PyArrayObject_HEAD
+	PyObject_HEAD
 	Simulation S;
 } S4Sim;
 
 typedef struct
 {
-	PyArrayObject_HEAD
+	PyObject_HEAD
 	Interpolator intp;
 }S4Interpolator;
 
 typedef struct
 {
-	PyArrayObject_HEAD
+	PyObject_HEAD
 	SpectrumSampler SpecS;
 }S4SpectrumSampler;
 
@@ -240,7 +240,7 @@ static PyTypeObject S4Sim_Type;
 static PyTypeObject S4Interpolator_Type;
 static PyTypeObject S4SpectrumSampler_Type;
 
-int bool_converter(PyArrayObject *obj, int *b){
+int bool_converter(PyObject *obj, int *b){
 	if(PyBool_Check(obj)){
 		if(Py_True == obj){
 			*b = 1;
@@ -262,7 +262,7 @@ struct lanczos_smoothing_settings{
 	double width;
 };
 
-int lanczos_converter(PyArrayObject *obj, struct lanczos_smoothing_settings *s){
+int lanczos_converter(PyObject *obj, struct lanczos_smoothing_settings *s){
 	s->set = 1;
 	s->set_power = 0;
 	s->set_width = 0;
@@ -272,7 +272,7 @@ int lanczos_converter(PyArrayObject *obj, struct lanczos_smoothing_settings *s){
 		return 1;
 	}else if(PyDict_Check(obj)){
         // printf("\nPassed in dict to lanczos\n");
-		PyArrayObject *val;
+		PyObject *val;
 		s->use = 1;
 		if((val = PyDict_GetItemString(obj, "Width"))){
 			s->set_width = 1;
@@ -314,7 +314,7 @@ return :
 	0: failed.
 	1: success.
 */
-int excitation_converter(PyArrayObject *obj, S4Excitation_Data *data)
+int excitation_converter(PyObject *obj, S4Excitation_Data *data)
 {
 	if(!PyTuple_Check(obj))
 	{
@@ -331,10 +331,10 @@ int excitation_converter(PyArrayObject *obj, S4Excitation_Data *data)
 
 	for(int i = 0; i < data->n; i++)
 	{
-		PyArrayObject *pi = PyTuple_GetItem(obj, i);
+		PyObject *pi = PyTuple_GetItem(obj, i);
 		char *pol;
 		Py_ssize_t polLen;
-		PyArrayObject *pj;
+		PyObject *pj;
 		if(!PyTuple_Check(pi))
 		{
 			PyErr_SetString(PyExc_TypeError, "the tuple item must be a tuple.");
@@ -380,7 +380,7 @@ int excitation_converter(PyArrayObject *obj, S4Excitation_Data *data)
 	return 1;
 }
 
-int lattice_converter(PyArrayObject *obj, double *Lr){
+int lattice_converter(PyObject *obj, double *Lr){
 	if(CheckPyNumber(obj)){
 		Lr[0] = AsNumberPyNumber(obj);
 		Lr[1] = 0;
@@ -390,13 +390,13 @@ int lattice_converter(PyArrayObject *obj, double *Lr){
 	}else if(PyTuple_Check(obj) && (PyTuple_Size(obj) == 2)){
 		unsigned i, j;
 		for(j = 0; j < 2; ++j){
-			PyArrayObject *pj = PyTuple_GetItem(obj, j);
+			PyObject *pj = PyTuple_GetItem(obj, j);
 			if(!PyTuple_Check(pj) || (PyTuple_Size(pj) != 2)){
 				PyErr_SetString(PyExc_TypeError, "2D lattice must be of the form ((ux,uy),(vx,vy))");
 				return 0;
 			}
 			for(i = 0; i < 2; ++i){
-				PyArrayObject *pi = PyTuple_GetItem(pj, i);
+				PyObject *pi = PyTuple_GetItem(pj, i);
 				if(CheckPyNumber(pi)){
 					Lr[i+j*2] = AsNumberPyNumber(pi);
 				}else{
@@ -415,7 +415,7 @@ struct epsilon_converter_data{
 	int type; /* 0 = scalar, 1 = 3x3 tensor */
 	double eps[18];
 };
-int epsilon_converter(PyArrayObject *obj, struct epsilon_converter_data *data){
+int epsilon_converter(PyObject *obj, struct epsilon_converter_data *data){
 	double *eps = data->eps;
 	if(CheckPyComplex(obj)){
 		data->type = 0;
@@ -433,10 +433,10 @@ int epsilon_converter(PyArrayObject *obj, struct epsilon_converter_data *data){
 		unsigned i, j;
 		data->type = 1;
 		for(i = 0; i < 3; ++i){
-			PyArrayObject *pi = PyTuple_GetItem(obj, i);
+			PyObject *pi = PyTuple_GetItem(obj, i);
 			if(PyTuple_Check(pi) && (PyTuple_Size(pi) == 3)){
 				for(j = 0; j < 3; ++j){
-					PyArrayObject *pj = PyTuple_GetItem(pi, j);
+					PyObject *pj = PyTuple_GetItem(pi, j);
 					if(CheckPyComplex(pj)){
 						AsComplexPyComplex(pj, &eps[2*(3*i+j)+0], &eps[2*(3*i+j)+1]);
 					}else{
@@ -458,7 +458,7 @@ struct polygon_converter_data{
 	int nvert;
 	double *vert;
 };
-int polygon_converter(PyArrayObject *obj, struct polygon_converter_data *data){
+int polygon_converter(PyObject *obj, struct polygon_converter_data *data){
 	int i;
 	if(!PyTuple_Check(obj)){
 		return 0;
@@ -466,11 +466,11 @@ int polygon_converter(PyArrayObject *obj, struct polygon_converter_data *data){
 	data->nvert = PyTuple_Size(obj);
 	data->vert = (double*)malloc(sizeof(double) * 2 * data->nvert);
 	for(i = 0; i < data->nvert; ++i){
-		PyArrayObject *pi = PyTuple_GetItem(obj, i);
+		PyObject *pi = PyTuple_GetItem(obj, i);
 		if(PyTuple_Check(pi) && (PyTuple_Size(pi) == 2)){
 			unsigned j;
 			for(j = 0; j < 2; ++j){
-				PyArrayObject *pj = PyTuple_GetItem(pi, j);
+				PyObject *pj = PyTuple_GetItem(pi, j);
 				if(CheckPyNumber(pj)){
 					data->vert[2*i+j] = AsNumberPyNumber(pj);
 				}else{
@@ -491,9 +491,9 @@ int polygon_converter(PyArrayObject *obj, struct polygon_converter_data *data){
 /*
 Description: the use is similar to excitation_converter().
 */
-static int interpolator_table_converter(PyArrayObject *args, S4Interpolator_Data *data)
+static int interpolator_table_converter(PyObject *args, S4Interpolator_Data *data)
 {
-	PyArrayObject *pi, *pj;
+	PyObject *pi, *pj;
 	if(NULL == data)
 		return 0;
 	if(!PyTuple_Check(args))
@@ -535,7 +535,7 @@ static int interpolator_table_converter(PyArrayObject *args, S4Interpolator_Data
 	return 1;
 }
 
-static PyArrayObject *S4Interpolator_new(PyTypeObject *type, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Interpolator_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = {"Type", "Table", NULL};
 	const char *typeName;
@@ -569,16 +569,16 @@ static PyArrayObject *S4Interpolator_new(PyTypeObject *type, PyArrayObject *args
 		self->intp = Interpolator_New(interData.n, interData.ny, interData.xy, inter_type);
 	}
 	free(interData.xy); interData.xy = NULL;
-	return (PyArrayObject*)self;
+	return (PyObject*)self;
 }
 
-static PyArrayObject *S4Interpolator_Get(S4Interpolator *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Interpolator_Get(S4Interpolator *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = {"X", NULL};
 	double x;
 	double *ys;
 	int ny;
-	PyArrayObject *ret;
+	PyObject *ret;
 	if(!PyArg_ParseTupleAndKeywords(args, kwds, "d:Get", kwlist, &x))
 		return NULL;
 	ys = Interpolator_Get(self->intp, x, &ny);
@@ -590,34 +590,34 @@ static PyArrayObject *S4Interpolator_Get(S4Interpolator *self, PyArrayObject *ar
 	return ret;
 }
 
-static PyArrayObject *S4SpectrumSampler_new(PyTypeObject *type, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4SpectrumSampler_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
 	static char * kwlist[] = {"FreqStart", "FreqEnd", "InitialNumPoints", "RangeThreshold", \
 		"MaxBend", "MinimumSpacing", "Parallelize", NULL};
 	double x0, x1;
 	SpectrumSampler_Options options = {33, 0.001, 10, 1e-6, 0};
-	PyArrayObject *py_expectBool = NULL;
+	PyObject *py_expectBool = NULL;
 	S4SpectrumSampler *self;
 	if(!PyArg_ParseTupleAndKeywords(args, kwds, "dd|idddO!:SpectrumSampler_New", \
 		kwlist, &x0, &x1, &options.initial_num_points, &options.range_threshold,\
 		&options.max_bend, &options.min_dx, &PyBool_Type, &py_expectBool))
 		return NULL;
 	if(NULL != py_expectBool)
-		options.parallelize = PyArrayObject_IsTrue(py_expectBool);
+		options.parallelize = PyObject_IsTrue(py_expectBool);
 
 	self = (S4SpectrumSampler*)type->tp_alloc(type, 0);
 	if(NULL == self)
 		return NULL;
 	self->SpecS = SpectrumSampler_New(x0, x1, &options);
-	return (PyArrayObject*)self;
+	return (PyObject*)self;
 }
 
-static PyArrayObject *S4_NewSpectrumSampler(PyArrayObject *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4_NewSpectrumSampler(PyObject *self, PyObject *args, PyObject *kwds)
 {
 	return S4SpectrumSampler_new(&S4SpectrumSampler_Type, args, kwds);
 }
 
-static PyArrayObject *S4Sim_new(PyTypeObject *type, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_new(PyTypeObject *type, PyObject *args, PyObject *kwds){
 	S4Sim *self;
 	double Lr[4];
 	Py_ssize_t nbasis;
@@ -635,37 +635,37 @@ static PyArrayObject *S4Sim_new(PyTypeObject *type, PyArrayObject *args, PyArray
 		Simulation_SetNumG(&(self->S), nbasis);
 	}
 
-	return (PyArrayObject*)self;
+	return (PyObject*)self;
 }
 
 static void S4Sim_dealloc(S4Sim* self){
 	Simulation_Destroy(&(self->S));
-	Py_TYPE(self)->tp_free((PyArrayObject*)self);
+	Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static void S4Interpolator_dealloc(S4Interpolator *self)
 {
 	Interpolator_Destroy(self->intp);
-	Py_TYPE(self)->tp_free((PyArrayObject*) self);
+	Py_TYPE(self)->tp_free((PyObject*) self);
 }
 
 static void S4SpectrumSampler_dealloc(S4SpectrumSampler *self)
 {
 	SpectrumSampler_Destroy(self->SpecS);
-	Py_TYPE(self)->tp_free((PyArrayObject*) self);
+	Py_TYPE(self)->tp_free((PyObject*) self);
 }
 
-static PyArrayObject *S4Sim_Clone(S4Sim *self, PyArrayObject *args){
+static PyObject *S4Sim_Clone(S4Sim *self, PyObject *args){
 	S4Sim *cpy;
 
 	cpy = (S4Sim*)S4Sim_Type.tp_alloc(&S4Sim_Type, 0);
 	if(cpy != NULL){
 		Simulation_Clone(&(self->S), &(cpy->S));
 	}
-	return (PyArrayObject*)cpy;
+	return (PyObject*)cpy;
 }
 
-static PyArrayObject *S4Sim_LoadSolution(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_LoadSolution(S4Sim *self, PyObject *args, PyObject *kwds){
     //printf"Inside S4Sim_LoadSolution\n");
 	static char *kwlist[] = { "Filename", NULL };
 	const char *fname;
@@ -680,7 +680,7 @@ static PyArrayObject *S4Sim_LoadSolution(S4Sim *self, PyArrayObject *args, PyArr
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_SaveSolution(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SaveSolution(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Filename", NULL };
 	const char *fname;
 	if(!PyArg_ParseTupleAndKeywords(args, kwds, "s:SaveSolution", kwlist, &fname)){ return NULL; }
@@ -692,7 +692,7 @@ static PyArrayObject *S4Sim_SaveSolution(S4Sim *self, PyArrayObject *args, PyArr
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_ConvertUnits(S4Sim *self, PyArrayObject *args)
+static PyObject *S4Sim_ConvertUnits(S4Sim *self, PyObject *args)
 {
 	double value;
 	const char *from_units = NULL;
@@ -704,7 +704,7 @@ static PyArrayObject *S4Sim_ConvertUnits(S4Sim *self, PyArrayObject *args)
 	return NULL;
 }
 
-static PyArrayObject *S4Sim_SetMaterial(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetMaterial(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Name", "Epsilon", NULL };
 	const char *name;
 	struct epsilon_converter_data epsdata;
@@ -742,12 +742,12 @@ static PyArrayObject *S4Sim_SetMaterial(S4Sim *self, PyArrayObject *args, PyArra
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_AddMaterial(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Sim_AddMaterial(S4Sim *self, PyObject *args, PyObject *kwds)
 {
 	return S4Sim_SetMaterial(self, args, kwds);
 }
 
-static PyArrayObject *S4Sim_AddLayer(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_AddLayer(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Name", "Thickness", "Material", NULL };
 	Layer *layer;
 	const char *name;
@@ -765,7 +765,7 @@ static PyArrayObject *S4Sim_AddLayer(S4Sim *self, PyArrayObject *args, PyArrayOb
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_SetLayer(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Sim_SetLayer(S4Sim *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = { "Name", "Thickness", "Material", NULL };
 	const char *name, *material = NULL;
@@ -786,7 +786,7 @@ static PyArrayObject *S4Sim_SetLayer(S4Sim *self, PyArrayObject *args, PyArrayOb
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_AddLayerCopy(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_AddLayerCopy(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Name", "Thickness", "Layer", NULL };
 	Layer *layer;
 	const char *name;
@@ -803,7 +803,7 @@ static PyArrayObject *S4Sim_AddLayerCopy(S4Sim *self, PyArrayObject *args, PyArr
 
 	Py_RETURN_NONE;
 }
-static PyArrayObject *S4Sim_SetLayerThickness(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetLayerThickness(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Layer", "Thickness", NULL };
 	Layer *layer;
 	const char *name;
@@ -823,7 +823,7 @@ static PyArrayObject *S4Sim_SetLayerThickness(S4Sim *self, PyArrayObject *args, 
 	}
 	Py_RETURN_NONE;
 }
-static PyArrayObject *S4Sim_RemoveLayerRegions(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_RemoveLayerRegions(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Layer", NULL };
 	Layer *layer;
 	const char *name;
@@ -839,7 +839,7 @@ static PyArrayObject *S4Sim_RemoveLayerRegions(S4Sim *self, PyArrayObject *args,
 	}
 	Py_RETURN_NONE;
 }
-static PyArrayObject *S4Sim_SetRegionCircle(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetRegionCircle(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Layer", "Material", "Center", "Radius", NULL };
 	Layer *layer;
 	Material *M;
@@ -871,7 +871,7 @@ static PyArrayObject *S4Sim_SetRegionCircle(S4Sim *self, PyArrayObject *args, Py
 	}
 	Py_RETURN_NONE;
 }
-static PyArrayObject *S4Sim_SetRegionEllipse(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetRegionEllipse(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Layer", "Material", "Center", "Angle", "Halfwidths", NULL };
 	Layer *layer;
 	Material *M;
@@ -903,7 +903,7 @@ static PyArrayObject *S4Sim_SetRegionEllipse(S4Sim *self, PyArrayObject *args, P
 	}
 	Py_RETURN_NONE;
 }
-static PyArrayObject *S4Sim_SetRegionRectangle(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetRegionRectangle(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Layer", "Material", "Center", "Angle", "Halfwidths", NULL };
 	Layer *layer;
 	Material *M;
@@ -935,7 +935,7 @@ static PyArrayObject *S4Sim_SetRegionRectangle(S4Sim *self, PyArrayObject *args,
 	}
 	Py_RETURN_NONE;
 }
-static PyArrayObject *S4Sim_SetRegionPolygon(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetRegionPolygon(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = { "Layer", "Material", "Center", "Angle", "Vertices", NULL };
 	Layer *layer;
 	Material *M;
@@ -970,7 +970,7 @@ static PyArrayObject *S4Sim_SetRegionPolygon(S4Sim *self, PyArrayObject *args, P
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_SetExcitationExterior(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Sim_SetExcitationExterior(S4Sim *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = {"Excitations", NULL};
 	S4Excitation_Data exciData = {0, NULL, NULL};	//set exg or ex NULL to get the size of tuple.
@@ -999,7 +999,7 @@ static PyArrayObject *S4Sim_SetExcitationExterior(S4Sim *self, PyArrayObject *ar
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_SetExcitationPlanewave(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetExcitationPlanewave(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	static char *kwlist[] = { "IncidenceAngles", "sAmplitude", "pAmplitude", "Order", NULL };
 	double angle[2];
@@ -1022,7 +1022,7 @@ static PyArrayObject *S4Sim_SetExcitationPlanewave(S4Sim *self, PyArrayObject *a
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_SetFrequency(S4Sim *self, PyArrayObject *args){
+static PyObject *S4Sim_SetFrequency(S4Sim *self, PyObject *args){
 	Py_complex f;
 	if(!PyArg_ParseTuple(args, "D:SetFrequency", &f)){ return NULL; }
 
@@ -1039,7 +1039,7 @@ static PyArrayObject *S4Sim_SetFrequency(S4Sim *self, PyArrayObject *args){
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_GetReciprocalLattice(S4Sim *self, PyArrayObject *args){
+static PyObject *S4Sim_GetReciprocalLattice(S4Sim *self, PyObject *args){
 	return PyTuple_Pack(2,
 		PyTuple_Pack(2,
 			PyFloat_FromDouble(self->S.Lk[0]), PyFloat_FromDouble(self->S.Lk[1])
@@ -1050,7 +1050,7 @@ static PyArrayObject *S4Sim_GetReciprocalLattice(S4Sim *self, PyArrayObject *arg
 	);
 }
 
-static PyArrayObject *S4Sim_GetEpsilon(S4Sim *self, PyArrayObject *args){
+static PyObject *S4Sim_GetEpsilon(S4Sim *self, PyObject *args){
 	int ret;
 	double r[3], feps[2];
 	if(!PyArg_ParseTuple(args, "ddd:GetEpsilon", &r[0], &r[1], &r[2])){ return NULL; }
@@ -1061,7 +1061,7 @@ static PyArrayObject *S4Sim_GetEpsilon(S4Sim *self, PyArrayObject *args){
 	return PyComplex_FromDoubles(feps[0], feps[1]);
 }
 
-static PyArrayObject *S4Sim_OutputLayerPatternRealization(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Sim_OutputLayerPatternRealization(S4Sim *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = { "Layer", "Nu", "Nv", "Filename", NULL };
 	const char *layerName;
@@ -1102,7 +1102,7 @@ static PyArrayObject *S4Sim_OutputLayerPatternRealization(S4Sim *self, PyArrayOb
 	Py_RETURN_NONE;
  }
 
-static PyArrayObject *S4Sim_OutputLayerPatternPostscript(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_OutputLayerPatternPostscript(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	static char *kwlist[] = { "Layer", "Filename", NULL };
 	const char *layername;
@@ -1135,7 +1135,7 @@ static PyArrayObject *S4Sim_OutputLayerPatternPostscript(S4Sim *self, PyArrayObj
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_OutputStructurePOVRay(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_OutputStructurePOVRay(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	static char *kwlist[] = { "Filename", NULL };
 	const char *filename = NULL;
@@ -1161,10 +1161,10 @@ static PyArrayObject *S4Sim_OutputStructurePOVRay(S4Sim *self, PyArrayObject *ar
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_GetBasisSet(S4Sim *self, PyArrayObject *args){
+static PyObject *S4Sim_GetBasisSet(S4Sim *self, PyObject *args){
 	int *G;
 	int n, i, ret;
-	PyArrayObject *rv;
+	PyObject *rv;
 
 	ret = Simulation_InitSolution(&(self->S));
 	if(0 != ret){
@@ -1189,7 +1189,7 @@ static PyArrayObject *S4Sim_GetBasisSet(S4Sim *self, PyArrayObject *args){
 	return rv;
 }
 
-static PyArrayObject *S4Sim_GetPropagationConstants(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetPropagationConstants(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret, n, i;
 	int *G;
 	static char *kwlist[] = { "Layer", NULL };
@@ -1214,7 +1214,7 @@ static PyArrayObject *S4Sim_GetPropagationConstants(S4Sim *self, PyArrayObject *
 		HandleSolutionErrorCode("GetPropagationConstants", ret);
 		return NULL;
 	}
-	PyArrayObject *rv;
+	PyObject *rv;
 	rv = PyTuple_New(2*n);
 	for(i = 0; i < n2; ++i){
 		PyTuple_SetItem(rv, i, PyComplex_FromDoubles(q[2*i+0], q[2*i+1]));
@@ -1223,7 +1223,7 @@ static PyArrayObject *S4Sim_GetPropagationConstants(S4Sim *self, PyArrayObject *
 	return rv;
 }
 
-static PyArrayObject *S4Sim_GetAmplitudes(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetAmplitudes(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret, n, i, j;
 	int *G;
 	static char *kwlist[] = { "Layer", "zOffset", NULL };
@@ -1231,7 +1231,7 @@ static PyArrayObject *S4Sim_GetAmplitudes(S4Sim *self, PyArrayObject *args, PyAr
 	double offset = 0;
 	double *amp;
 	Layer *layer;
-	PyArrayObject *rv, *rventry;
+	PyObject *rv, *rventry;
 
 	if(!PyArg_ParseTupleAndKeywords(args, kwds, "s|d:GetAmplitudes", kwlist, &layername, &offset)){ return NULL; }
 
@@ -1261,7 +1261,7 @@ static PyArrayObject *S4Sim_GetAmplitudes(S4Sim *self, PyArrayObject *args, PyAr
 	free(amp);
 	return rv;
 }
-static PyArrayObject *S4Sim_GetPowerFlux(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetPowerFlux(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	static char *kwlist[] = { "Layer", "zOffset", NULL };
 	const char *layername;
@@ -1287,7 +1287,7 @@ static PyArrayObject *S4Sim_GetPowerFlux(S4Sim *self, PyArrayObject *args, PyArr
 		PyComplex_FromDoubles(power[1], power[3])
 	);
 }
-static PyArrayObject *S4Sim_GetPowerFluxByOrder(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetPowerFluxByOrder(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret, n, i;
 	int *G;
 	static char *kwlist[] = { "Layer", "zOffset", NULL };
@@ -1295,7 +1295,7 @@ static PyArrayObject *S4Sim_GetPowerFluxByOrder(S4Sim *self, PyArrayObject *args
 	double offset = 0;
 	double *power;
 	Layer *layer;
-	PyArrayObject *rv;
+	PyObject *rv;
 
 	if(!PyArg_ParseTupleAndKeywords(args, kwds, "s|d:GetPowerFluxByOrder", kwlist, &layername, &offset)){ return NULL; }
 
@@ -1324,7 +1324,7 @@ static PyArrayObject *S4Sim_GetPowerFluxByOrder(S4Sim *self, PyArrayObject *args
 	free(power);
 	return rv;
 }
-static PyArrayObject *S4Sim_GetStressTensorIntegral(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetStressTensorIntegral(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	static char *kwlist[] = { "Layer", "zOffset", NULL };
 	const char *layername;
@@ -1352,7 +1352,7 @@ static PyArrayObject *S4Sim_GetStressTensorIntegral(S4Sim *self, PyArrayObject *
 
 	);
 }
-static PyArrayObject *S4Sim_GetLayerVolumeIntegral(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetLayerVolumeIntegral(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	static char *kwlist[] = { "Layer", "Quantity", NULL };
 	const char *layername;
@@ -1390,7 +1390,7 @@ static PyArrayObject *S4Sim_GetLayerVolumeIntegral(S4Sim *self, PyArrayObject *a
 
 	return PyComplex_FromDoubles(integral[0], integral[1]);
 }
-static PyArrayObject *S4Sim_GetLayerZIntegral(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetLayerZIntegral(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	static char *kwlist[] = { "Layer", "xy", NULL };
 	const char *layername;
@@ -1423,7 +1423,7 @@ static PyArrayObject *S4Sim_GetLayerZIntegral(S4Sim *self, PyArrayObject *args, 
 		)
 	);
 }
-static PyArrayObject *S4Sim_GetFields(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetFields(S4Sim *self, PyObject *args, PyObject *kwds){
 	int ret;
 	double r[3], fE[6],fH[6];
 	if(!PyArg_ParseTuple(args, "ddd:GetFields", &r[0], &r[1], &r[2])){ return NULL; }
@@ -1447,14 +1447,14 @@ static PyArrayObject *S4Sim_GetFields(S4Sim *self, PyArrayObject *args, PyArrayO
 	);
 }
 
-static PyArrayObject *S4Sim_GetFieldsOnGridNumpy(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Sim_GetFieldsOnGridNumpy(S4Sim *self, PyObject *args, PyObject *kwds)
 {
   static char* kwlist[] = { "z", "NumSamples", NULL };
   double z;
   double *Efields, *Hfields;
   int ret;
   Py_ssize_t nxy[2];
-  /* PyArrayObject* EHfields = NULL; */
+  /* PyObject* EHfields = NULL; */
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "d(nn):GetFieldsOnGrid", kwlist, &z, &nxy[0], &nxy[1])) {
     return NULL;
   }
@@ -1522,7 +1522,7 @@ static PyArrayObject *S4Sim_GetFieldsOnGridNumpy(S4Sim *self, PyArrayObject *arg
 }
 
 
-static PyArrayObject *S4Sim_GetFieldsOnGrid(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_GetFieldsOnGrid(S4Sim *self, PyObject *args, PyObject *kwds){
 	int i, j, ret;
 	static char *kwlist[] = { "z", "NumSamples", "Format", "BaseFilename", NULL };
 	Py_ssize_t nxy[2];
@@ -1642,7 +1642,7 @@ static PyArrayObject *S4Sim_GetFieldsOnGrid(S4Sim *self, PyArrayObject *args, Py
 	}else{ /* Array */
 		unsigned k, i3;
 		double *F[2] = { Efields, Hfields };
-		PyArrayObject *rv = PyTuple_New(2);
+		PyObject *rv = PyTuple_New(2);
 
         /* PyArray_ENABLEFLAGS(arr, NPY_ARRAY_OWNDATA); */
         /* int nd; */
@@ -1655,13 +1655,13 @@ static PyArrayObject *S4Sim_GetFieldsOnGrid(S4Sim *self, PyArrayObject *args, Py
         /* Earr = PyArray_SimpleNewFromData(nd, dims, NPY_COMPLEX128, Efields);` */
         /* Harr = PyArray_SimpleNewFromData(nd, dims, NPY_COMPLEX128, Hfields);` */
 		for(k = 0; k < 2; ++k){
-			PyArrayObject *pk = PyTuple_New(nxy[1]);
+			PyObject *pk = PyTuple_New(nxy[1]);
 			PyTuple_SetItem(rv, k, pk);
             for(j = 0; j < nxy[1]; ++j){
-				PyArrayObject *pi = PyTuple_New(nxy[0]);
+				PyObject *pi = PyTuple_New(nxy[0]);
 				PyTuple_SetItem(pk, j, pi);
                 for(i = 0; i < nxy[0]; ++i){
-					PyArrayObject *pj = PyTuple_New(3);
+					PyObject *pj = PyTuple_New(3);
 					PyTuple_SetItem(pi, i, pj);
 					for(i3 = 0; i3 < 3; ++i3){
 						PyTuple_SetItem(pj, i3, PyComplex_FromDoubles(
@@ -1679,7 +1679,7 @@ static PyArrayObject *S4Sim_GetFieldsOnGrid(S4Sim *self, PyArrayObject *args, Py
 	}
 }
 
-static PyArrayObject *S4Sim_GetSMatrixDeterminant(S4Sim *self, PyArrayObject *args){
+static PyObject *S4Sim_GetSMatrixDeterminant(S4Sim *self, PyObject *args){
 	int ret;
 	double mant[2], base;
 	int expo;
@@ -1696,7 +1696,7 @@ static PyArrayObject *S4Sim_GetSMatrixDeterminant(S4Sim *self, PyArrayObject *ar
 	);
 }
 
-static PyArrayObject *S4Sim_SetVerbosity(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4Sim_SetVerbosity(S4Sim *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = {"Level", NULL};
 	int level;
@@ -1712,7 +1712,7 @@ static PyArrayObject *S4Sim_SetVerbosity(S4Sim *self, PyArrayObject *args, PyArr
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4Sim_SetOptions(S4Sim *self, PyArrayObject *args, PyArrayObject *kwds){
+static PyObject *S4Sim_SetOptions(S4Sim *self, PyObject *args, PyObject *kwds){
 	static char *kwlist[] = {
 		"Verbosity",                 /* int */
 		"LatticeTruncation",         /* str */
@@ -1828,7 +1828,7 @@ static PyArrayObject *S4Sim_SetOptions(S4Sim *self, PyArrayObject *args, PyArray
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4SpectrumSampler_IsDone(S4SpectrumSampler *self, PyArrayObject *args)
+static PyObject *S4SpectrumSampler_IsDone(S4SpectrumSampler *self, PyObject *args)
 {
 	if(!PyArg_ParseTuple(args, ":IsDone"))
 		return NULL;
@@ -1837,7 +1837,7 @@ static PyArrayObject *S4SpectrumSampler_IsDone(S4SpectrumSampler *self, PyArrayO
 	Py_RETURN_FALSE;
 }
 
-static PyArrayObject *S4SpectrumSampler_IsParallelized(S4SpectrumSampler *self, PyArrayObject *args)
+static PyObject *S4SpectrumSampler_IsParallelized(S4SpectrumSampler *self, PyObject *args)
 {
 	if(!PyArg_ParseTuple(args, ":IsParallelized"))
 		return NULL;
@@ -1846,7 +1846,7 @@ static PyArrayObject *S4SpectrumSampler_IsParallelized(S4SpectrumSampler *self, 
 	Py_RETURN_FALSE;
 }
 
-static PyArrayObject *S4SpectrumSampler_GetFrequency(S4SpectrumSampler *self, PyArrayObject *args)
+static PyObject *S4SpectrumSampler_GetFrequency(S4SpectrumSampler *self, PyObject *args)
 {
 	if(!PyArg_ParseTuple(args, ":GetFrequency"))
 		return NULL;
@@ -1858,11 +1858,11 @@ static PyArrayObject *S4SpectrumSampler_GetFrequency(S4SpectrumSampler *self, Py
 	return Py_BuildValue("d", SpectrumSampler_GetFrequency(self->SpecS));
 }
 
-static PyArrayObject *S4SpectrumSampler_GetFrequencies(S4SpectrumSampler *self, PyArrayObject *args)
+static PyObject *S4SpectrumSampler_GetFrequencies(S4SpectrumSampler *self, PyObject *args)
 {
 	Py_ssize_t nf;
 	double *freqs;
-	PyArrayObject *retObj;
+	PyObject *retObj;
 	if(!PyArg_ParseTuple(args, ":GetFrequencies"))
 		return NULL;
 	if(!SpectrumSampler_IsParallelized(self->SpecS))
@@ -1877,7 +1877,7 @@ static PyArrayObject *S4SpectrumSampler_GetFrequencies(S4SpectrumSampler *self, 
 	return retObj;
 }
 
-static PyArrayObject *S4SpectrumSampler_SubmitResult(S4SpectrumSampler *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4SpectrumSampler_SubmitResult(S4SpectrumSampler *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = {"Result", NULL};
 	double y;
@@ -1892,12 +1892,12 @@ static PyArrayObject *S4SpectrumSampler_SubmitResult(S4SpectrumSampler *self, Py
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4SpectrumSampler_SubmitResults(S4SpectrumSampler *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4SpectrumSampler_SubmitResults(S4SpectrumSampler *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = { "Results", NULL };
 	int ny;
 	double *y;
-	PyArrayObject *tupleObj = NULL;
+	PyObject *tupleObj = NULL;
 	if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!:SubmitResults", kwlist, &PyTuple_Type, &tupleObj))
 		return NULL;
 	if(!SpectrumSampler_IsParallelized(self->SpecS))
@@ -1917,11 +1917,11 @@ static PyArrayObject *S4SpectrumSampler_SubmitResults(S4SpectrumSampler *self, P
 	Py_RETURN_NONE;
 }
 
-static PyArrayObject *S4SpectrumSampler_GetSpectrum(S4SpectrumSampler *self, PyArrayObject *args)
+static PyObject *S4SpectrumSampler_GetSpectrum(S4SpectrumSampler *self, PyObject *args)
 {
 	int n;
 	double pt[2];
-	PyArrayObject *retObj;
+	PyObject *retObj;
 	SpectrumSampler_Enumerator e;
 	if(!PyArg_ParseTuple(args, ":GetSpectrum"))
 		return NULL;
@@ -2158,17 +2158,17 @@ static PyTypeObject S4SpectrumSampler_Type = {
 	0,                  /*tp_is_gc*/
 };
 
-static PyArrayObject *S4_new(PyArrayObject *self, PyArrayObject *args, PyArrayObject *kwds){
-	return (PyArrayObject*)S4Sim_new(&S4Sim_Type, args, kwds);
+static PyObject *S4_new(PyObject *self, PyObject *args, PyObject *kwds){
+	return (PyObject*)S4Sim_new(&S4Sim_Type, args, kwds);
 }
 
-static PyArrayObject *S4_NewInterpolator(PyArrayObject *self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4_NewInterpolator(PyObject *self, PyObject *args, PyObject *kwds)
 {
-	return (PyArrayObject*)S4Interpolator_new(&S4Interpolator_Type, args, kwds);
+	return (PyObject*)S4Interpolator_new(&S4Interpolator_Type, args, kwds);
 }
 
 //didn't finished yet
-static PyArrayObject *S4_SolveInParallel(PyArrayObject *Self, PyArrayObject *args, PyArrayObject *kwds)
+static PyObject *S4_SolveInParallel(PyObject *Self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = {"Layer", "Simulations", NULL};
 	const char *layerName;
@@ -2201,13 +2201,13 @@ static struct PyModuleDef S4_module = {
 	NULL
 };
 #define INITERROR return NULL
-PyArrayObject * PyInit_S4(void)
+PyObject * PyInit_S4(void)
 #else
 #define INITERROR return
 PyMODINIT_FUNC initS4(void)
 #endif
 {
-	PyArrayObject *m = NULL;
+	PyObject *m = NULL;
 
 	//threadsafe_init();
 
