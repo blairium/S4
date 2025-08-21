@@ -1474,9 +1474,9 @@ static PyObject *S4Sim_GetFieldsOnGridNumpy(S4Sim *self, PyObject *args, PyObjec
   /* dims = snxy */
   /* npy_intp dims[3] = {nxy[0], nxy[1], 3}; */
   npy_intp dims[3] = {nxy[1], nxy[0], 3};
-  PyArrayObject *Earr;
+  PyObject *Earr;
   /* PyArray_Descr* desc = PyArray_DescrFromType(NPY_COMPLEX128); */
-  Earr = PyArray_SimpleNewFromData(3, dims, NPY_COMPLEX128, Efields);
+  Earr = PyArray_SimpleNewFromData(3, dims, NPY_COMPLEX128, (PyArrayObject*)Efields);
   /* PyArray_Dims new_dims; */
   /* npy_intp tmp[3] = {1, 0, 2}; */
   /* new_dims.ptr = tmp; */
@@ -1490,8 +1490,8 @@ static PyObject *S4Sim_GetFieldsOnGridNumpy(S4Sim *self, PyObject *args, PyObjec
   /* PyArray_UpdateFlags(Earr, NPY_ARRAY_UPDATE_ALL); */
   PyArray_ENABLEFLAGS(Earr, NPY_ARRAY_OWNDATA);
   /* PyArray_ENABLEFLAGS(Earr,  NPY_ARRAY_F_CONTIGUOUS); */
-  PyArrayObject *Harr;
-  Harr = PyArray_SimpleNewFromData(3, dims, NPY_COMPLEX128, Hfields);
+  PyObject *Harr;
+  Harr = PyArray_SimpleNewFromData(3, dims, NPY_COMPLEX128, (PyArrayObject*)Hfields);
   /* Harr = PyArray_Transpose(Harr, &new_dims); */
   /* strides = PyArray_STRIDES(Harr); */
   /* temp = strides[0]; */
